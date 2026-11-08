@@ -1,4 +1,2 @@
-{"src":"c0","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"n1","node_ids":["n1"]}}
-{"src":"c1","dest":"n1","body":{"type":"echo","msg_id":2,"echo":"test1"}}
-{"src":"c2","dest":"n1","body":{"type":"echo","msg_id":3,"echo":"test2"}}
-{"src":"c3","dest":"n1","body":{"type":"echo","msg_id":4,"echo":"test3"}}
+{"src":"c0","dest":"n1","body":{"type":"init","msg_id":1,"node_id":"n1","node_ids":["n1","n2"]}}
+{"src":"c1","dest":"n1","body":{"type":"proxy","msg_id":2,"target":"n2","inner":{"type":"echo","echo":"test"}}}

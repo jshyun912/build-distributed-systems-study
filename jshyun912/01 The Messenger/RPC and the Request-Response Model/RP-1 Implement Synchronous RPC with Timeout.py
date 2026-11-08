@@ -12,6 +12,8 @@ class Node:
         self.pending = {}  # msg_id -> threading.Event
         self.replies = {}  # msg_id -> reply body
 
+        self.proxy_lock = threading.Lock()
+
     def send(self, dest, body):
         with self.lock:
             body["msg_id"] = self.next_msg_id
@@ -26,33 +28,46 @@ class Node:
         self.send(request["src"], body)
 
     def send_rpc(self, dest, body):
-        msg_id = self.send(dest, body)
-        self.pending[msg_id] = threading.Event()
-        self.replies[msg_id] = {
-            "type": "error",
-            "code": 0,
-        }
-
+        with self.proxy_lock:
+            msg_id = self.send(dest, body)
+            self.pending[msg_id] = threading.Event()
         return msg_id
 
     def wait_reply(self, msg_id, timeout=1.0):
-        event:threading.Event = self.pending[msg_id]
+        with self.lock:
+            event = self.pending[msg_id]
 
-        if not event.wait(timeout):
-            body = []
+        if event.wait(timeout):
+            body = {
+                "type": "proxy_ok",
+                "result": self.replies[msg_id]
+            }
 
-        else: body = []
-
-        self.send()
+        else:
+            body = {
+            "type": "error",
+            "code": 0,
+            "text": "RPC timeout"
+        }
+            
+        return body
 
     def handle_reply(self, body):
-        msg_id = body.get("in_reply_to")
+        with self.proxy_lock:
+            msg_id = body.get("in_reply_to")
 
+        with self.lock:
+            event = self.pending.get(msg_id)
 
-        self.handle_reply[msg_id]
+            if event is None:
+                return
 
+            self.replies[msg_id] = body
+            event.set()
 
-        pass
+    def proxy_response(self, requset, body):
+        msg_id = self.send_rpc(body["target"], body["inner"])
+        self.reply(requset, self.wait_reply(msg_id))
 
 def main():
     node = Node()
@@ -72,8 +87,8 @@ def main():
         elif msg_type == "echo":
             node.reply(message, {"type": "echo_ok", "echo": body["echo"]})
         elif msg_type == "proxy":
-            msg_id = node.send_rpc(message["target"], message["inner"])
-            threading.Thread(target=node.wait_reply, args=(msg_id, ))
+            threading.Thread(target=node.proxy_response, args=(message, body)).start()
+
         else:
             node.handle_reply(body)
 
